@@ -1,0 +1,90 @@
+# 1. Load the data
+data <- read.csv("activity.csv")
+dim(data) ##confirm there are 17568 records
+
+## 2. Process/transform the datainto a format suitable for analysis
+library(dplyr)
+## add column: timeid from interval: 115 is 01:15, max 23:55 in a day
+data <- mutate(data,
+               timeid = formatC(interval, width = 4, flag = "0"))
+## 3. Calculate the total number of steps taken per day
+total <- aggregate(steps ~ date, data, sum)
+
+## Make a histogram of the total number of steps taken each day
+barplot(height=total$steps, names.arg=total$date,
+        xlab="date",ylab="steps", main="Total steps each date")
+abline(h = mean(total$steps,na.rm=TRUE), col = "blue",lwd=3, lty=3)
+
+## Calculate  mean and median of the total number of steps taken per day
+mean(total$steps,na.rm=TRUE) ## mean: 10766.19
+median(total$steps,na.rm=TRUE)  ## median: 10765
+sum(total$steps) ##  570608
+
+## Q2. What is the average daily activity pattern?
+## make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days(y-axis)
+avg_timeid <- aggregate(steps ~ timeid, data, mean)
+
+plot(avg_timeid$timeid,avg_timeid$steps,type="l",
+     xlab="5-minute time interval",ylab="steps", 
+     main="avg steps in 5-minute time interval within a day")
+##mark avg line
+abline(h = mean(avg_timeid$steps,na.rm=TRUE), col = "blue",lwd=3, lty=3)
+
+## which 5-minute interval contains the max number of steps?
+## 08:35 with 206.2 steps: just wake up and exercise....
+max <- which.max(avg_timeid$steps) 
+avg_timeid[max,]
+
+##calculate and report total number of missing values in the data
+## 2304 data missing, counted as 13.1% of all
+missing <- is.na(data$steps)
+table(missing)
+mean(missing)
+
+##fill up missing steps with 5-minute interval average
+data2 <- data
+for (i in 1:nrow(data2)){
+        if(is.na(data2$steps[i])){ ## is missing value
+                this_timeid <- data2$timeid[i]
+                ## first assign steps from 5-minute interval average
+                data2$steps[i] <- subset(avg_timeid, timeid==this_timeid)$steps
+                ##print(paste("i:---",i,"---,timeid---",this_timeid,"---,steps:",v))
+        }
+}
+
+total2 <- aggregate(steps ~ date, data2, sum)
+
+## Make a histogram of the total number of steps taken each day
+barplot(height=total2$steps, names.arg=total2$date,
+        xlab="date",ylab="steps", main="Total steps each date\n(no missing data)")
+##mark avg line
+abline(h = mean(total2$steps,na.rm=TRUE), col = "blue",lwd=3, lty=3)
+
+## Calculate  mean and median of the total number of steps taken per day
+mean(total2$steps,na.rm=TRUE) ## mean: 10766.19 --> 10766.19
+median(total2$steps,na.rm=TRUE) ## median: 10765 --> 10766.19
+sum(total2$steps) ## 570608 --> 656737.5
+
+## Create a new factor variable two levels – “weekday” and “weekend” 
+Sys.setlocale(category = "LC_ALL", locale = "english")
+data2$wd <- weekdays(as.Date(data2$date))
+data2$fwd <- as.factor(c("weekday","weekend"))
+## assign weekday or weekend
+for (i in 1:nrow(data2)){
+        wd <- data2$wd[i]
+        if(grepl(wd,"Saturday|Sunday")){
+                data2$fwd[i] <- "weekend"
+        }else{
+                data2$fwd[i] <- "weekday"
+        }
+}
+
+## Make a panel plot by weekday or weekend
+library(ggplot2)
+
+avg2 <- aggregate(steps ~ interval+fwd, data2, mean)
+g <- ggplot(avg2,aes(interval,steps)) + geom_line()
+g <- g + facet_grid(fwd ~ .)
+g <- g + labs(x="Interval",y="Number of steps")
+print(g)
+
